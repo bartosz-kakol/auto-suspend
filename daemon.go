@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/fatih/color"
@@ -9,67 +10,79 @@ import (
 
 type DaemonLogger struct {
 	// cache commonly used styles
-	primary   func(a ...any) string
-	secondary func(a ...any) string
-	bold      func(a ...any) string
-	red       func(a ...any) string
-	yellow    func(a ...any) string
-	lightGray func(a ...any) string
+	Primary   func(a ...any) string
+	Secondary func(a ...any) string
+	Bold      func(a ...any) string
+	Red       func(a ...any) string
+	Green     func(a ...any) string
+	Yellow    func(a ...any) string
+	LightGray func(a ...any) string
+
+	noMasterScriptWarningShown bool
 }
 
 func NewDaemonLogger() *DaemonLogger {
 	return &DaemonLogger{
-		primary:   color.New(color.FgBlue, color.Bold).SprintFunc(),
-		secondary: color.New(color.FgCyan, color.Bold).SprintFunc(),
-		bold:      color.New(color.Bold).SprintFunc(),
-		red:       color.New(color.FgRed).SprintFunc(),
-		yellow:    color.New(color.FgYellow).SprintFunc(),
-		lightGray: color.New(color.FgWhite).SprintFunc(),
+		Primary:   color.New(color.FgBlue, color.Bold).SprintFunc(),
+		Secondary: color.New(color.FgCyan, color.Bold).SprintFunc(),
+		Bold:      color.New(color.Bold).SprintFunc(),
+		Red:       color.New(color.FgRed).SprintFunc(),
+		Green:     color.New(color.FgGreen).SprintFunc(),
+		Yellow:    color.New(color.FgYellow).SprintFunc(),
+		LightGray: color.New(color.FgWhite).SprintFunc(),
+
+		noMasterScriptWarningShown: false,
 	}
 }
 
-func (l *DaemonLogger) log(message string) {
+func (l *DaemonLogger) Log(message string) {
 	currentTime := time.Now()
 	formattedTime := currentTime.Format("2006-01-02 15:04:05")
 
 	fmt.Printf(
 		"%s %s\n",
-		l.bold(fmt.Sprintf("[%s]", formattedTime)),
+		l.Bold(fmt.Sprintf("[%s]", formattedTime)),
 		message,
 	)
 }
 
 func (l *DaemonLogger) Begin(env *Environment) {
-	l.log(l.primary("auto-suspend daemon started"))
-	l.log(fmt.Sprintf("interpreter: %s", env.PythonInterpreterPath))
+	l.Log(l.Primary("auto-suspend daemon started"))
+	l.Log(fmt.Sprintf("interpreter: %s", env.PythonInterpreterPath))
 }
 
 func (l *DaemonLogger) RunningMasterScript(script string) {
-	l.log(fmt.Sprintf("running master script: %s", script))
+	l.Log(fmt.Sprintf("running master script: %s", script))
 }
 
 func (l *DaemonLogger) MasterScriptOutput(output string) {
-	l.log(fmt.Sprintf("master script output:\n%s", l.lightGray(output)))
+	l.Log(fmt.Sprintf("master script output:\n%s", l.LightGray(output)))
 }
 
 func (l *DaemonLogger) NoMasterScriptDefaultPath() {
-	l.log(l.yellow("no master script was specified. the default path will be used."))
+	if l.noMasterScriptWarningShown {
+		return
+	}
+
+	l.Log(l.Yellow("no master script was specified. the default path will be used."))
+
+	l.noMasterScriptWarningShown = true
 }
 
 func (l *DaemonLogger) ChosenPath(path string) {
-	l.log(fmt.Sprintf("chosen path: %s", path))
+	l.Log(fmt.Sprintf("chosen path: %s", path))
 }
 
 func (l *DaemonLogger) OnErrorInfo(mode string) {
-	l.log(fmt.Sprintf("on_error mode: %s", mode))
+	l.Log(fmt.Sprintf("on_error mode: %s", mode))
 }
 
 func (l *DaemonLogger) OnErrorInfoDefault() {
-	l.log("on_error mode: terminate (default)")
+	l.Log("on_error mode: terminate (default)")
 }
 
 func (l *DaemonLogger) SequenceHeader() {
-	l.log(l.secondary("running sequence"))
+	l.Log(l.Secondary("running sequence"))
 }
 
 func (l *DaemonLogger) Operator(op string) {
@@ -77,33 +90,39 @@ func (l *DaemonLogger) Operator(op string) {
 }
 
 func (l *DaemonLogger) StepStart(scriptPath string) {
-	l.log(fmt.Sprintf("> %s", scriptPath))
+	l.Log(fmt.Sprintf("> %s", scriptPath))
 }
 
 func (l *DaemonLogger) StepInvalidScriptPath() {
-	l.log(l.red("invalid script path"))
+	l.Log(l.Red("invalid script path"))
 }
 
 func (l *DaemonLogger) StepErrorAction(action string, err error) {
-	l.log(action)
-	l.log(fmt.Sprintf("script error:\n%s", l.red(err.Error())))
+	l.Log(action)
+	l.Log(fmt.Sprintf("script error:\n%s", l.Red(err.Error())))
 }
 
 func (l *DaemonLogger) StepErrorActionInvalid() {
-	l.log(l.red("invalid on_error value"))
+	l.Log(l.Red("invalid on_error value"))
 }
 
 func (l *DaemonLogger) StepOutputDecision(decision string, output string) {
-	l.log(fmt.Sprintf("%s\nscript output:\n%s", decision, l.lightGray(output)))
+	l.Log(fmt.Sprintf("%s\nscript output:\n%s", decision, l.LightGray(output)))
 }
 
-func RunDaemon(cfg *Config, env *Environment) error {
+type DaemonOptions struct {
+	Once bool
+}
+
+func RunDaemon(cfg *Config, env *Environment, opts *DaemonOptions) error {
 	logger := NewDaemonLogger()
 	sleepDuration := time.Duration(cfg.RunEvery) * time.Second
 	logger.Begin(env)
 
 	for {
-		time.Sleep(sleepDuration)
+		if !opts.Once {
+			time.Sleep(sleepDuration)
+		}
 
 		suspend, err := AutoRunSequence(cfg, env, logger)
 
@@ -112,8 +131,46 @@ func RunDaemon(cfg *Config, env *Environment) error {
 			panic("critical error. check logs.")
 		} else {
 			if suspend {
-				// TODO actually suspend
+				suspendErrors := AutoSystemSuspend()
+
+				var sb strings.Builder
+				sb.WriteString(
+					fmt.Sprintf(
+						"💤 %s using the following methods:\n",
+						logger.Primary("suspending"),
+					),
+				)
+
+				for title, err := range *suspendErrors {
+					var summary string
+					var details string
+
+					if err != nil {
+						summary = "❌ did not work"
+						details = fmt.Sprintf("%s", logger.Red(err.Error()))
+					} else {
+						summary = "✅ worked"
+						details = logger.Green("success")
+					}
+
+					sb.WriteString(
+						fmt.Sprintf(
+							"> %s: %s\n%s\n\n",
+							logger.LightGray(title),
+							summary,
+							details,
+						),
+					)
+				}
+
+				logger.Log(sb.String())
 			}
 		}
+
+		if opts.Once {
+			break
+		}
 	}
+
+	return nil
 }

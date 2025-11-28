@@ -155,6 +155,7 @@ func RunDebugger(cfg *Config, env *Environment) error {
 	primary := color.New(color.FgBlue, color.Bold).SprintFunc()
 	boldGreen := color.New(color.FgGreen, color.Bold).SprintFunc()
 	boldRed := color.New(color.FgRed, color.Bold).SprintFunc()
+	red := color.New(color.FgRed).SprintFunc()
 
 	// Clear the console
 	// \033[H  -> Move cursor to top-left
@@ -173,18 +174,26 @@ func RunDebugger(cfg *Config, env *Environment) error {
 		if err != nil {
 			err.Print()
 		} else {
-			fmt.Printf(
-				"%s ",
-				primary("The computer would"),
-			)
+			fmt.Printf(primary("the computer would "))
 
 			if suspend {
-				fmt.Printf("%s", boldGreen("suspend"))
-			} else {
-				fmt.Printf("%s", boldRed("not suspend"))
-			}
+				fmt.Printf("%s\n", boldGreen("suspend"))
 
-			fmt.Printf("\n")
+				cmds, err := GetSystemSuspendCommands()
+
+				if err != nil {
+					fmt.Println("it would not work however, because:")
+					fmt.Println(red(err.Error()))
+				} else {
+					fmt.Println("and it would try the following methods to achieve that in the listed order:")
+
+					for i, cmd := range cmds {
+						fmt.Printf("%d. %s\n", i+1, cmd)
+					}
+				}
+			} else {
+				fmt.Printf("%s\n", boldRed("not suspend"))
+			}
 		}
 
 		fmt.Printf("%s", inverted("Press Enter/Return to repeat the sequence, or Ctrl+C to exit..."))

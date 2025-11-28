@@ -38,7 +38,11 @@ func run(cCtx *cli.Context) error {
 
 	env := NewEnvironment()
 
-	return RunDaemon(cfg, env)
+	opts := &DaemonOptions{
+		Once: cCtx.Bool("once"),
+	}
+
+	return RunDaemon(cfg, env, opts)
 }
 
 func debug(cCtx *cli.Context) error {
@@ -67,7 +71,13 @@ func main() {
 				Name:      "run",
 				Usage:     "Run auto-suspend daemon.",
 				ArgsUsage: "config_file",
-				Action:    run,
+				Flags: []cli.Flag{
+					&cli.BoolFlag{
+						Name:  "once",
+						Usage: "Run the sequence only once and exit.",
+					},
+				},
+				Action: run,
 			},
 			{
 				Name:      "debug",

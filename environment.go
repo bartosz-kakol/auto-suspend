@@ -8,11 +8,13 @@ import (
 
 type Environment struct {
 	PythonInterpreterPath string
+	SuspendCommand        string
 }
 
 func NewEnvironment() *Environment {
 	return &Environment{
 		PythonInterpreterPath: getPythonInterpreterPath(),
+		SuspendCommand:        getSuspendCommand(),
 	}
 }
 
@@ -36,4 +38,8 @@ func getPythonInterpreterPath() string {
 	}
 
 	return path
+}
+
+func getSuspendCommand() string {
+	return os.Getenv("AUTOSUSPEND_SUSPEND_COMMAND")
 }
