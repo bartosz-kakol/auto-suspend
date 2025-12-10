@@ -15,13 +15,13 @@ jobs:
     strategy:
       matrix:
         os: [linux, windows, darwin]
-        arch: [amd64, arm64, armv7]
+        arch: [amd64, arm64, arm]
 
         exclude:
           - os: windows
-            arch: armv7
+            arch: arm
           - os: darwin
-            arch: armv7
+            arch: arm
 
     steps:
       - name: 🔄 Checkout Code
@@ -36,13 +36,19 @@ jobs:
         env:
           GOOS: ${{ matrix.os }}
           GOARCH: ${{ matrix.arch }}
-          GOARM: ${{ matrix.arch == 'armv7' && 7 || '' }} 
+          GOARM: ${{ matrix.arch == 'arm' && 7 || '' }}
           
         run: |
-          if [ "${{ matrix.os }}" = "windows" ]; then
-            OUTPUT_NAME="mycli_${{ matrix.os }}_${{ matrix.arch }}.exe"
+          if [ "${{ matrix.arch }}" = "arm" ]; then
+            OUTPUT_ARCH_NAME="armv7"
           else
-            OUTPUT_NAME="mycli_${{ matrix.os }}_${{ matrix.arch }}"
+            OUTPUT_ARCH_NAME="${{ matrix.arch }}"
+          fi
+          
+          if [ "${{ matrix.os }}" = "windows" ]; then
+            OUTPUT_NAME="auto-suspend_${{ matrix.os }}_${{ matrix.arch }}.exe"
+          else
+            OUTPUT_NAME="auto-suspend_${{ matrix.os }}_${{ matrix.arch }}"
           fi
 
           go build -o dist/$OUTPUT_NAME .
