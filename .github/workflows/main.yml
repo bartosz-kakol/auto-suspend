@@ -1,0 +1,96 @@
+name: Build and Release
+
+on:
+  push:
+    # Trigger the workflow only when a new tag is pushed (e.g., v1.0)
+    tags:
+      - 'v[0-9]+.[0-9]+'
+  workflow_dispatch: # Allows manual running
+
+jobs:
+  build:
+    name: Build for ${{ matrix.os }}-${{ matrix.arch }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        os: [linux, windows, darwin]
+        arch: [amd64, arm64, armv7]
+
+        exclude:
+          - os: windows
+            arch: armv7
+          - os: darwin
+            arch: armv7
+
+    steps:
+      - name: 🔄 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🛠️ Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: 🏗️ Build CLI App
+        env:
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix.arch }}
+          GOARM: ${{ matrix.arch == 'armv7' && 7 || '' }} 
+          
+        run: |
+          if [ "${{ matrix.os }}" = "windows" ]; then
+            OUTPUT_NAME="mycli_${{ matrix.os }}_${{ matrix.arch }}.exe"
+          else
+            OUTPUT_NAME="mycli_${{ matrix.os }}_${{ matrix.arch }}"
+          fi
+
+          go build -o dist/$OUTPUT_NAME .
+          
+      - name: 📦 Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-suspend-${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/
+
+  release:
+    name: 📝 Create Draft Release
+    needs: build
+    runs-on: ubuntu-latest
+    
+    # Only run the release job if the workflow was triggered by a tag push
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: ⬇️ Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+
+      - name: 🔎 Verify Downloaded Files
+        run: ls -R dist/
+
+      - name: ✍️ Create Draft Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: true
+          prerelease: false
+          body: |
+            ## New Release ${{ github.ref }}
+            
+            This is a draft release with binaries for multiple platforms/architectures.
+
+      - name: 📤 Upload Binaries to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: dist/*/*
+          asset_name: ${{ github.event.repository.name }}-${{ github.ref_name }}
+          asset_content_type: application/octet-stream
