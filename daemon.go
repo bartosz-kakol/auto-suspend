@@ -114,6 +114,57 @@ type DaemonOptions struct {
 	Once bool
 }
 
+func doSuspend(logger *DaemonLogger, env *Environment) {
+	var suspendErrors *map[string]error
+
+	if env.SuspendCommand != "" {
+		args := strings.Fields(env.SuspendCommand)
+		cmd := &SuspendCommand{
+			Binary: args[0],
+			Args:   args[1:],
+		}
+		err := RunSuspendCommand(cmd)
+
+		suspendErrors = &map[string]error{
+			cmd.String(): err,
+		}
+	} else {
+		suspendErrors = AutoSystemSuspend()
+	}
+
+	var sb strings.Builder
+	sb.WriteString(
+		fmt.Sprintf(
+			"💤 %s using the following methods:\n",
+			logger.Primary("suspending"),
+		),
+	)
+
+	for title, err := range *suspendErrors {
+		var summary string
+		var details string
+
+		if err != nil {
+			summary = "❌ did not work"
+			details = fmt.Sprintf("%s", logger.Red(err.Error()))
+		} else {
+			summary = "✅ worked"
+			details = logger.Green("success")
+		}
+
+		sb.WriteString(
+			fmt.Sprintf(
+				"> %s\n%s\n%s\n\n",
+				logger.LightGray(title),
+				summary,
+				details,
+			),
+		)
+	}
+
+	logger.Log(sb.String())
+}
+
 func RunDaemon(cfg *Config, env *Environment, opts *DaemonOptions) error {
 	logger := NewDaemonLogger()
 	sleepDuration := time.Duration(cfg.RunEvery) * time.Second
@@ -128,43 +179,12 @@ func RunDaemon(cfg *Config, env *Environment, opts *DaemonOptions) error {
 
 		if err != nil {
 			err.Print()
-			panic("critical error. check logs.")
-		} else {
-			if suspend {
-				suspendErrors := AutoSystemSuspend()
 
-				var sb strings.Builder
-				sb.WriteString(
-					fmt.Sprintf(
-						"💤 %s using the following methods:\n",
-						logger.Primary("suspending"),
-					),
-				)
+			return fmt.Errorf("fatal error! check logs.\nthis is all i know:\n%s - %s", err.message, err.details)
+		}
 
-				for title, err := range *suspendErrors {
-					var summary string
-					var details string
-
-					if err != nil {
-						summary = "❌ did not work"
-						details = fmt.Sprintf("%s", logger.Red(err.Error()))
-					} else {
-						summary = "✅ worked"
-						details = logger.Green("success")
-					}
-
-					sb.WriteString(
-						fmt.Sprintf(
-							"> %s: %s\n%s\n\n",
-							logger.LightGray(title),
-							summary,
-							details,
-						),
-					)
-				}
-
-				logger.Log(sb.String())
-			}
+		if suspend {
+			doSuspend(logger, env)
 		}
 
 		if opts.Once {

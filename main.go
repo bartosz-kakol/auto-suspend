@@ -61,7 +61,6 @@ func debug(cCtx *cli.Context) error {
 
 	return RunDebugger(cfg, env)
 }
-
 func main() {
 	app := &cli.App{
 		Name:  "auto-suspend",
@@ -70,6 +69,7 @@ func main() {
 			{
 				Name:      "run",
 				Usage:     "Run auto-suspend daemon.",
+				Action:    run,
 				ArgsUsage: "config_file",
 				Flags: []cli.Flag{
 					&cli.BoolFlag{
@@ -77,13 +77,12 @@ func main() {
 						Usage: "Run the sequence only once and exit.",
 					},
 				},
-				Action: run,
 			},
 			{
 				Name:      "debug",
 				Usage:     "Debug your configuration by seeing its effects in detail without actually suspending the computer.",
-				ArgsUsage: "config_file",
 				Action:    debug,
+				ArgsUsage: "config_file",
 			},
 		},
 	}

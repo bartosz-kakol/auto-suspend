@@ -22,7 +22,7 @@ func (e *SequenceError) Print() {
 	errorText := color.New(color.FgRed).SprintFunc()
 
 	fmt.Printf(
-		"🛑 %s\n%s\n\n",
+		"🛑 %s\n%s\n",
 		titleText(e.message),
 		errorText(e.details),
 	)
