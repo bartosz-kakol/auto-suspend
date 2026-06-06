@@ -38,8 +38,13 @@ func run(cCtx *cli.Context) error {
 
 	env := NewEnvironment()
 
+	apiEnabled := cCtx.Bool("api")
+	apiAddr := fmt.Sprintf(":%d", cCtx.Int("api-port"))
+
 	opts := &DaemonOptions{
-		Once: cCtx.Bool("once"),
+		Once:       cCtx.Bool("once"),
+		APIEnabled: apiEnabled,
+		APIAddr:    apiAddr,
 	}
 
 	return RunDaemon(cfg, env, opts)
@@ -75,6 +80,15 @@ func main() {
 					&cli.BoolFlag{
 						Name:  "once",
 						Usage: "Run the sequence only once and exit.",
+					},
+					&cli.BoolFlag{
+						Name:  "api",
+						Usage: "Run an HTTP API server alongside the daemon.",
+					},
+					&cli.IntFlag{
+						Name:  "api-port",
+						Usage: "Port for the HTTP API server.",
+						Value: 8080,
 					},
 				},
 			},

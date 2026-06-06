@@ -111,7 +111,9 @@ func (l *DaemonLogger) StepOutputDecision(decision string, output string) {
 }
 
 type DaemonOptions struct {
-	Once bool
+	Once       bool
+	APIEnabled bool
+	APIAddr    string
 }
 
 func doSuspend(logger *DaemonLogger, env *Environment) {
@@ -133,11 +135,9 @@ func doSuspend(logger *DaemonLogger, env *Environment) {
 	}
 
 	var sb strings.Builder
-	sb.WriteString(
-		fmt.Sprintf(
-			"💤 %s using the following methods:\n",
-			logger.Primary("suspending"),
-		),
+	fmt.Fprintf(&sb,
+		"💤 %s using the following methods:\n",
+		logger.Primary("suspending"),
 	)
 
 	for title, err := range *suspendErrors {
@@ -169,6 +169,14 @@ func RunDaemon(cfg *Config, env *Environment, opts *DaemonOptions) error {
 	logger := NewDaemonLogger()
 	sleepDuration := time.Duration(cfg.RunEvery) * time.Second
 	logger.Begin(env)
+
+	if opts.APIEnabled {
+		go func() {
+			if err := RunAPIServer(logger, env, opts.APIAddr); err != nil {
+				logger.Log(logger.Red(fmt.Sprintf("API server error: %s", err.Error())))
+			}
+		}()
+	}
 
 	for {
 		if !opts.Once {

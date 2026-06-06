@@ -15,7 +15,7 @@ func RunScript(interpreterPath string, scriptPath string) (string, error) {
 		var exitError *exec.ExitError
 
 		if errors.As(err, &exitError) {
-			return "", fmt.Errorf(string(exitError.Stderr))
+			return "", fmt.Errorf("%s", string(exitError.Stderr))
 		}
 	}
 

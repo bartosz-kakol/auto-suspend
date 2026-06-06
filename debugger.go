@@ -174,7 +174,7 @@ func RunDebugger(cfg *Config, env *Environment) error {
 		if err != nil {
 			err.Print()
 		} else {
-			fmt.Printf(primary("the computer would "))
+			fmt.Printf("%s", primary("the computer would "))
 
 			if suspend {
 				fmt.Printf("%s\n", boldGreen("suspend"))
@@ -197,7 +197,15 @@ func RunDebugger(cfg *Config, env *Environment) error {
 		}
 
 		fmt.Printf("%s", inverted("Press Enter/Return to repeat the sequence, or Ctrl+C to exit..."))
-		scanner.Scan()
+
+		if !scanner.Scan() {
+			if err := scanner.Err(); err != nil {
+				return err
+			}
+
+			return nil
+		}
+
 		fmt.Println("_______________________________________________________________")
 	}
 }
