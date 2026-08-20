@@ -42,6 +42,7 @@ type ILogger interface {
 	Operator(op string)
 
 	StepStart(scriptPath string)
+	RemoteStepStart(addr string)
 	StepInvalidScriptPath()
 	StepErrorAction(action string, err error)
 	StepErrorActionInvalid()
@@ -92,22 +93,38 @@ func RunSequence(path *PathConfig, env *Environment, logger ILogger) (bool, *Seq
 			continue
 		}
 
-		logger.StepStart(step.Script.Script)
+		var output string
+		var err error
 
-		if _, err := os.Stat(step.Script.Script); errors.Is(err, os.ErrNotExist) {
-			logger.StepInvalidScriptPath()
+		switch step.Type {
+		case "script":
+			logger.StepStart(step.Script.Script)
 
+			if _, statErr := os.Stat(step.Script.Script); errors.Is(statErr, os.ErrNotExist) {
+				logger.StepInvalidScriptPath()
+
+				return false, NewSequenceError(
+					"invalid script path",
+					fmt.Sprintf("the script at:\n%s\ndoes not exist", step.Script.Script),
+				)
+			}
+
+			output, err = RunScript(env.PythonInterpreterPath, step.Script.Script)
+		case "remote":
+			logger.RemoteStepStart(step.Remote.Remote)
+
+			output, err = CallRemote(step.Remote.Remote)
+		default:
 			return false, NewSequenceError(
-				"invalid script path",
-				fmt.Sprintf("the script at:\n%s\ndoes not exist", step.Script.Script),
+				"invalid sequence step",
+				fmt.Sprintf("'%s' is not a valid sequence step type", step.Type),
 			)
 		}
 
-		output, err := RunScript(env.PythonInterpreterPath, step.Script.Script)
 		var suspendDecision bool
 
 		if err != nil {
-			onErrorBehavior := step.Script.OnError
+			onErrorBehavior := step.OnError()
 
 			if onErrorBehavior == "" {
 				onErrorBehavior = path.OnError
@@ -147,8 +164,8 @@ func RunSequence(path *PathConfig, env *Environment, logger ILogger) (bool, *Seq
 				suspendDecision = false
 			default:
 				return false, NewSequenceError(
-					"invalid script output",
-					fmt.Sprintf("the script at:\n%s\nreturned an invalid output: '%s'", step.Script.Script, output),
+					"invalid step output",
+					fmt.Sprintf("%s\nreturned an invalid output: '%s'", step.Describe(), output),
 				)
 			}
 		}

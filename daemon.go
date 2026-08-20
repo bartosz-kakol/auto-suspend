@@ -51,6 +51,13 @@ func (l *DaemonLogger) Begin(env *Environment) {
 	l.Log(fmt.Sprintf("interpreter: %s", env.PythonInterpreterPath))
 }
 
+func (l *DaemonLogger) BeginRemote(env *Environment, addr string) {
+	l.Log(l.Primary("auto-suspend remote server started"))
+	l.Log(fmt.Sprintf("interpreter: %s", env.PythonInterpreterPath))
+	l.Log(fmt.Sprintf("listening on %s%s", addr, RemoteCheckPath))
+	l.Log(l.Yellow("this machine will not be suspended in remote mode"))
+}
+
 func (l *DaemonLogger) RunningMasterScript(script string) {
 	l.Log(fmt.Sprintf("running master script: %s", script))
 }
@@ -93,13 +100,17 @@ func (l *DaemonLogger) StepStart(scriptPath string) {
 	l.Log(fmt.Sprintf("> %s", scriptPath))
 }
 
+func (l *DaemonLogger) RemoteStepStart(addr string) {
+	l.Log(fmt.Sprintf("> remote: %s", addr))
+}
+
 func (l *DaemonLogger) StepInvalidScriptPath() {
 	l.Log(l.Red("invalid script path"))
 }
 
 func (l *DaemonLogger) StepErrorAction(action string, err error) {
 	l.Log(action)
-	l.Log(fmt.Sprintf("script error:\n%s", l.Red(err.Error())))
+	l.Log(fmt.Sprintf("step error:\n%s", l.Red(err.Error())))
 }
 
 func (l *DaemonLogger) StepErrorActionInvalid() {
@@ -107,7 +118,7 @@ func (l *DaemonLogger) StepErrorActionInvalid() {
 }
 
 func (l *DaemonLogger) StepOutputDecision(decision string, output string) {
-	l.Log(fmt.Sprintf("%s\nscript output:\n%s", decision, l.LightGray(output)))
+	l.Log(fmt.Sprintf("%s\nstep output:\n%s", decision, l.LightGray(output)))
 }
 
 type DaemonOptions struct {

@@ -99,6 +99,10 @@ func (l *DebuggerLogger) StepStart(scriptPath string) {
 	fmt.Printf("▶︎ %s ", l.bold(scriptPath))
 }
 
+func (l *DebuggerLogger) RemoteStepStart(addr string) {
+	fmt.Printf("▶︎ %s %s ", l.boldMagenta("remote:"), l.bold(addr))
+}
+
 func (l *DebuggerLogger) StepInvalidScriptPath() {
 	fmt.Printf("\n")
 }

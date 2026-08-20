@@ -26,6 +26,12 @@ auto-suspend run --api config.yaml
 
 # Run with the API server on a custom port
 auto-suspend run --api --api-port 9090 config.yaml
+
+# Run as a remote decision server for another machine (default port 8080)
+auto-suspend run --remote config.yaml
+
+# Run the remote decision server on a custom port
+auto-suspend run --remote --remote-port 9090 config.yaml
 ```
 
 ### API mode
@@ -48,6 +54,38 @@ curl -X POST http://localhost:8080/suspend
 ```
 
 The endpoint uses the same suspend logic as the daemon (respects `AUTOSUSPEND_SUSPEND_COMMAND` if set, otherwise auto-detects per OS) and returns `200 OK` once the suspend command has been dispatched.
+
+### Remote mode
+
+With `--remote`, the daemon does not run on a timer and never suspends the machine it
+runs on. Instead it exposes a single HTTP endpoint that evaluates the configured
+sequence on demand and reports the verdict as plain text. This lets you dedicate one
+machine to deciding whether *another* machine may go to sleep.
+
+`--remote` and `--api` cannot be used together.
+
+| Flag | Default | Description |
+|---|---|---|
+| `--remote` | - | Run as a remote decision server instead of a daemon |
+| `--remote-port` | `8080` | Port the remote server listens on |
+
+#### Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/check` | Run the sequence and answer `yes` or `no` |
+
+```sh
+curl http://192.168.0.13:8080/check
+# yes
+```
+
+The response body is `yes` when the sequence agrees to suspend and `no` when it does
+not. If the sequence itself cannot be evaluated (a bad path, an invalid script output,
+and so on) the endpoint responds with `500` and the error message as the body.
+
+Requests are handled one at a time, so a slow sequence delays other callers rather than
+running several copies of your scripts at once.
 
 ### Environment variables
 
@@ -78,6 +116,35 @@ Each script is a Python file that must print exactly `yes` or `no` to stdout:
 - `no` - this condition does not agree to suspend
 
 The computer is suspended only when the full sequence resolves to `yes`.
+
+### Remote steps
+
+A sequence step can also delegate the decision to another machine running auto-suspend
+in [remote mode](#remote-mode). Use `remote` instead of `script` and give it the address
+of that machine:
+
+```yaml
+run_every: 60
+
+paths:
+  default:
+    on_error: terminate
+    sequence:
+      - script: /home/user/scripts/is_anyone_logged_in.py
+      - remote: 192.168.0.13:8080
+      - script: /home/user/scripts/is_vm_running.py
+```
+
+Remote steps take part in the sequence exactly like script steps: they are evaluated in
+order, combine with `AND`/`OR` the same way, and support the same `on_error` values
+(including a step-level override).
+
+The address may be a bare `host:port`, in which case `http://` and the `/check` path are
+filled in automatically. A full URL such as `http://192.168.0.13:8080/check` works too.
+
+For a remote step, an error means the remote could not be reached, responded with an
+error status, or returned anything other than `yes` or `no`. Requests time out after 30
+seconds.
 
 ### Paths
 
@@ -112,7 +179,7 @@ This evaluates as `(A OR B) AND C`.
 
 ### Error handling
 
-The `on_error` field controls what happens when a script exits with a non-zero code. It can be set at the path level (applies to all steps) or overridden per step:
+The `on_error` field controls what happens when a step fails - a script exiting with a non-zero code, or a remote that could not be reached or gave a malformed answer. It can be set at the path level (applies to all steps) or overridden per step:
 
 | Value | Behavior |
 |---|---|

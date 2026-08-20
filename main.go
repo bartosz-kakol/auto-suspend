@@ -40,6 +40,17 @@ func run(cCtx *cli.Context) error {
 
 	apiEnabled := cCtx.Bool("api")
 	apiAddr := fmt.Sprintf(":%d", cCtx.Int("api-port"))
+	remoteEnabled := cCtx.Bool("remote")
+
+	if apiEnabled && remoteEnabled {
+		return cli.Exit("--api and --remote cannot be used at the same time", 1)
+	}
+
+	if remoteEnabled {
+		remoteAddr := fmt.Sprintf(":%d", cCtx.Int("remote-port"))
+
+		return RunRemoteServer(cfg, env, NewDaemonLogger(), remoteAddr)
+	}
 
 	opts := &DaemonOptions{
 		Once:       cCtx.Bool("once"),
@@ -88,6 +99,15 @@ func main() {
 					&cli.IntFlag{
 						Name:  "api-port",
 						Usage: "Port for the HTTP API server.",
+						Value: 8080,
+					},
+					&cli.BoolFlag{
+						Name:  "remote",
+						Usage: "Run as a remote decision server instead of a daemon (never suspends this computer). An endpoint answers 'yes' or 'no' over HTTP instead. Cannot be combined with --api.",
+					},
+					&cli.IntFlag{
+						Name:  "remote-port",
+						Usage: "Port for the remote decision server.",
 						Value: 8080,
 					},
 				},
